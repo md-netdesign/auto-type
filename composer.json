@@ -1,0 +1,20 @@
+{
+  "name": "md-netdesign/auto-type",
+  "type": "library",
+  "license": "MIT",
+  "autoload": {
+    "psr-4": {
+      "MdNetdesign\\Form\\": "src/"
+    }
+  },
+  "authors": [
+    {
+      "name": "Tom Janke",
+      "email": "tom.janke@md-netdesign.de"
+    }
+  ],
+  "require": {
+    "php": "^8.0",
+    "symfony/form": "^5.0"
+  }
+}
