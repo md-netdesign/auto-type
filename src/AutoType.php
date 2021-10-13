@@ -17,12 +17,21 @@ class AutoType extends AbstractType
 {
 
   public function buildForm(FormBuilderInterface $builder, array $options) {
-    $group = $options["group"];
+    ["group" => $group, "groups" => $groups] = $options;
+
+    if ($group === null && empty($groups))
+      throw new LogicException("Either option 'group' or 'groups' must be set.");
+
+    if ($group !== null && !empty($groups))
+      throw new LogicException("Option 'group' and 'groups' cannot both be set.");
+
+    $groups = empty($groups) ? [$group] : $groups;
+
     try {
       $rClass = new ReflectionClass($options["data_class"] ?? $options["reflection_class"]);
 
       /** @var FormField[] $formFields */
-      $formFields = array_filter(array_map(fn(ReflectionAttribute $rAttribute) => $rAttribute->newInstance(), $rClass->getAttributes(FormField::class)), fn(FormField $formField) => $formField->getGroup() === $group || $formField->getGroup() === FormField::GROUP_ALL);
+      $formFields = array_filter(array_map(fn(ReflectionAttribute $rAttribute) => $rAttribute->newInstance(), $rClass->getAttributes(FormField::class)), fn(FormField $formField) => in_array($formField->getGroup(), $groups, true) || $formField->getGroup() === FormField::GROUP_ALL);
       foreach ($formFields as $formField) {
         if ($formField->getName() === null)
           throw new LogicException("Form field on class '{$rClass->getName()}' must have a custom name.");
@@ -32,12 +41,12 @@ class AutoType extends AbstractType
 
       foreach ($rClass->getProperties() as $rProperty) {
         /** @var FormField[] $formFields */
-        $formFields = array_filter(array_map(fn(ReflectionAttribute $rAttribute) => $rAttribute->newInstance(), $rProperty->getAttributes(FormField::class)), fn(FormField $formField) => $formField->getGroup() === $group || $formField->getGroup() === FormField::GROUP_ALL);
+        $formFields = array_filter(array_map(fn(ReflectionAttribute $rAttribute) => $rAttribute->newInstance(), $rProperty->getAttributes(FormField::class)), fn(FormField $formField) => in_array($formField->getGroup(), $groups, true) || $formField->getGroup() === FormField::GROUP_ALL);
 
         if (($sizeOfFormFields = sizeof($formFields)) === 0)
           continue;
         if ($sizeOfFormFields > 1)
-          throw new LogicException("Property '{$rProperty->getName()}' can only be editable once in group '$group'.");
+          throw new LogicException("Property '{$rProperty->getName()}' can only be editable once in groups '".join(",", $groups)."'.");
 
         $formField = reset($formFields);
 
@@ -61,7 +70,10 @@ class AutoType extends AbstractType
 
   public function configureOptions(OptionsResolver $resolver) {
     $resolver->setDefault("group", null);
-    $resolver->setAllowedTypes("group", "string");
+    $resolver->setAllowedTypes("group", ["null", "string"]);
+
+    $resolver->setDefault("groups", null);
+    $resolver->setAllowedTypes("groups", ["null", "array"]);
 
     $resolver->setDefault("reflection_class", null);
     $resolver->setAllowedTypes("reflection_class", ["null", "string"]);
