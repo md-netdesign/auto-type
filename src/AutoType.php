@@ -26,12 +26,36 @@ class AutoType extends AbstractType
       throw new LogicException("Option 'group' and 'groups' cannot both be set.");
 
     $groups = empty($groups) ? [$group] : $groups;
+    $wildcardGroups = array_filter($groups, fn(string $group) => str_starts_with($group, "*") || str_ends_with($group, "*"));
+    $nonWildcardGroups = array_diff($groups, $wildcardGroups);
+
+    foreach ($nonWildcardGroups as $group)
+      if (str_contains($group, "*"))
+        throw new LogicException("Group name '$group' must not contain '*'.");
+
+    $filterFormField = function (FormField $formField) use ($nonWildcardGroups, $wildcardGroups) {
+      $formFieldGroup = $formField->getGroup();
+      if (in_array($formFieldGroup, $nonWildcardGroups, true) || $formFieldGroup === FormField::GROUP_ALL)
+        return true;
+
+      foreach ($wildcardGroups as $wildcardGroup)
+        if (str_starts_with($wildcardGroup, "*")) {
+          if (str_ends_with($formFieldGroup, str_replace("*", "", $wildcardGroup)))
+            return true;
+        } else {
+          // ends with *
+          if (str_starts_with($formFieldGroup, str_replace("*", "", $wildcardGroup)))
+            return true;
+        }
+
+      return false;
+    };
 
     try {
       $rClass = new ReflectionClass($options["data_class"] ?? $options["reflection_class"]);
 
       /** @var FormField[] $formFields */
-      $formFields = array_filter(array_map(fn(ReflectionAttribute $rAttribute) => $rAttribute->newInstance(), $rClass->getAttributes(FormField::class)), fn(FormField $formField) => in_array($formField->getGroup(), $groups, true) || $formField->getGroup() === FormField::GROUP_ALL);
+      $formFields = array_filter(array_map(fn(ReflectionAttribute $rAttribute) => $rAttribute->newInstance(), $rClass->getAttributes(FormField::class)), $filterFormField);
       foreach ($formFields as $formField) {
         if ($formField->getName() === null)
           throw new LogicException("Form field on class '{$rClass->getName()}' must have a custom name.");
@@ -41,7 +65,7 @@ class AutoType extends AbstractType
 
       foreach ($rClass->getProperties() as $rProperty) {
         /** @var FormField[] $formFields */
-        $formFields = array_filter(array_map(fn(ReflectionAttribute $rAttribute) => $rAttribute->newInstance(), $rProperty->getAttributes(FormField::class)), fn(FormField $formField) => in_array($formField->getGroup(), $groups, true) || $formField->getGroup() === FormField::GROUP_ALL);
+        $formFields = array_filter(array_map(fn(ReflectionAttribute $rAttribute) => $rAttribute->newInstance(), $rProperty->getAttributes(FormField::class)), $filterFormField);
 
         if (($sizeOfFormFields = sizeof($formFields)) === 0)
           continue;
