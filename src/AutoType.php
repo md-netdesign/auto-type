@@ -26,6 +26,10 @@ class AutoType extends AbstractType
       throw new LogicException("Option 'group' and 'groups' cannot both be set.");
 
     $groups = empty($groups) ? [$group] : $groups;
+
+    if (in_array(FormField::GROUP_ALL, $groups))
+      $groups[] = "*";
+
     $wildcardGroups = array_filter($groups, fn(string $group) => str_starts_with($group, "*") || str_ends_with($group, "*"));
     $nonWildcardGroups = array_diff($groups, $wildcardGroups);
 
