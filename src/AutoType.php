@@ -1,7 +1,7 @@
 <?php
 
 
-namespace MdNetdesign\Form;
+namespace MdNetdesign\AutoType;
 
 
 use LogicException;

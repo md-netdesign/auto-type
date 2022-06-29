@@ -1,0 +1,4 @@
+services:
+  MdNetdesign\AutoType\AutoType:
+    autowire: true
+    autoconfigure: true
