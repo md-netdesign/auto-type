@@ -8,13 +8,24 @@ use LogicException;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionException;
+use Symfony\Component\DependencyInjection\Attribute\TaggedIterator;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\DataTransformerInterface;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
+use Traversable;
 
 class AutoType extends AbstractType
 {
+
+  private readonly Traversable $dataTransformersIterator;
+  private ?array $dataTransformers = null;
+
+  public function __construct(
+    #[TaggedIterator("auto_type.data_transformer")] Traversable $dataTransformers
+  ) {
+    $this->dataTransformersIterator = $dataTransformers;
+  }
 
   public function buildForm(FormBuilderInterface $builder, array $options) {
     ["group" => $group, "groups" => $groups] = $options;
@@ -87,8 +98,15 @@ class AutoType extends AbstractType
           if (!is_subclass_of($dataTransformer, DataTransformerInterface::class))
             throw new LogicException("$dataTransformer must implement ".DataTransformerInterface::class.".");
 
-          $builder->get($propertyName)
-            ->addModelTransformer(new $dataTransformer);
+          if ($this->dataTransformers === null)
+            $this->dataTransformers = array_column(array_map(fn(DataTransformerInterface $dataTransformer) => [$dataTransformer::class, $dataTransformer], iterator_to_array($this->dataTransformersIterator)), 1, 0);
+
+          if (array_key_exists($dataTransformer, $this->dataTransformers))
+            $builder->get($propertyName)
+              ->addModelTransformer($this->dataTransformers[$dataTransformer]);
+          else
+            $builder->get($propertyName)
+              ->addModelTransformer(new $dataTransformer);
         }
       }
     } catch (ReflectionException $e) {
