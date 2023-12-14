@@ -27,7 +27,7 @@ class AutoType extends AbstractType
     $this->dataTransformersIterator = $dataTransformers;
   }
 
-  public function buildForm(FormBuilderInterface $builder, array $options) {
+  public function buildForm(FormBuilderInterface $builder, array $options): void {
     ["group" => $group, "groups" => $groups] = $options;
 
     if ($group === null && empty($groups))
@@ -49,17 +49,16 @@ class AutoType extends AbstractType
         throw new LogicException("Group name '$group' must not contain '*'.");
 
     $filterFormField = function (FormField $formField) use ($nonWildcardGroups, $wildcardGroups) {
-      $formFieldGroup = $formField->getGroup();
-      if (in_array($formFieldGroup, $nonWildcardGroups, true) || $formFieldGroup === FormField::GROUP_ALL)
+      if (in_array($formField->group, $nonWildcardGroups, true) || $formField->group === FormField::GROUP_ALL)
         return true;
 
       foreach ($wildcardGroups as $wildcardGroup)
         if (str_starts_with($wildcardGroup, "*")) {
-          if (str_ends_with($formFieldGroup, str_replace("*", "", $wildcardGroup)))
+          if (str_ends_with($formField->group, str_replace("*", "", $wildcardGroup)))
             return true;
         } else {
           // ends with *
-          if (str_starts_with($formFieldGroup, str_replace("*", "", $wildcardGroup)))
+          if (str_starts_with($formField->group, str_replace("*", "", $wildcardGroup)))
             return true;
         }
 
@@ -72,10 +71,10 @@ class AutoType extends AbstractType
       /** @var FormField[] $formFields */
       $formFields = array_filter(array_map(fn(ReflectionAttribute $rAttribute) => $rAttribute->newInstance(), $rClass->getAttributes(FormField::class)), $filterFormField);
       foreach ($formFields as $formField) {
-        if ($formField->getName() === null)
+        if ($formField->name === null)
           throw new LogicException("Form field on class '{$rClass->getName()}' must have a custom name.");
 
-        $builder->add($formField->getName(), $formField->getType(), $formField->getOptions());
+        $builder->add($formField->name, $formField->type, $formField->options);
       }
 
       foreach ($rClass->getProperties() as $rProperty) {
@@ -89,24 +88,24 @@ class AutoType extends AbstractType
 
         $formField = reset($formFields);
 
-        if ($formField->getName() !== null)
+        if ($formField->name !== null)
           throw new LogicException("Form field on property '{$rProperty->getName()}' must not have a custom name, only class level form fields can use this property.");
 
-        $builder->add(($propertyName = $rProperty->getName()), $formField->getType(), $formField->getOptions());
+        $builder->add(($propertyName = $rProperty->getName()), $formField->type, $formField->options);
 
-        if (($dataTransformer = $formField->getDataTransformer()) !== null) {
-          if (!is_subclass_of($dataTransformer, DataTransformerInterface::class))
-            throw new LogicException("$dataTransformer must implement ".DataTransformerInterface::class.".");
+        if ($formField->dataTransformer !== null) {
+          if (!is_subclass_of($formField->dataTransformer, DataTransformerInterface::class))
+            throw new LogicException("$formField->dataTransformer must implement ".DataTransformerInterface::class.".");
 
           if ($this->dataTransformers === null)
             $this->dataTransformers = array_column(array_map(fn(DataTransformerInterface $dataTransformer) => [$dataTransformer::class, $dataTransformer], iterator_to_array($this->dataTransformersIterator)), 1, 0);
 
-          if (array_key_exists($dataTransformer, $this->dataTransformers))
+          if (array_key_exists($formField->dataTransformer, $this->dataTransformers))
             $builder->get($propertyName)
-              ->addModelTransformer($this->dataTransformers[$dataTransformer]);
+              ->addModelTransformer($this->dataTransformers[$formField->dataTransformer]);
           else
             $builder->get($propertyName)
-              ->addModelTransformer(new $dataTransformer);
+              ->addModelTransformer(new $formField->dataTransformer);
         }
       }
     } catch (ReflectionException $e) {
@@ -114,7 +113,7 @@ class AutoType extends AbstractType
     }
   }
 
-  public function configureOptions(OptionsResolver $resolver) {
+  public function configureOptions(OptionsResolver $resolver): void {
     $resolver->setDefault("group", null);
     $resolver->setAllowedTypes("group", ["null", "string"]);
 
